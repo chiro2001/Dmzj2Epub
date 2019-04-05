@@ -44,7 +44,7 @@ def parse():
     # 目录管理
     toc = [(epub.Section(filename), []), ]
     # 主线
-    spine = ['cover', 'nav']
+    spine = ['nav']
     set_cover = False
 
     # print(filename, out)
@@ -69,10 +69,10 @@ def parse():
                 set_cover = True
                 book.set_cover('cover.jpg', data)
 
-            page = epub.EpubHtml(title=file.filename, file_name='%s.html' % file.filename)
+            page = epub.EpubHtml(title=file.filename, file_name='Text/%s.html' % file.filename)
             page.set_content(("<img src=\"%s\">" % ("images/%s" % file.filename)).encode())
             toc[0][1].append(page)
-            spine.append(page)
+            # spine.append(page)
             # spine.append(img)
             book.add_item(page)
             book.add_item(img)
@@ -86,6 +86,7 @@ def parse():
         # create spine
         book.spine = spine
         epub.write_epub(out, book)
+        sys.exit()
 
 
 book = epub.EpubBook()
