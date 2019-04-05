@@ -3,6 +3,7 @@ import zipfile
 import sys
 import getopt
 import os
+from base_logger import getLogger
 
 
 help_str = '''
@@ -30,16 +31,61 @@ def parse_file(filepath):
 
 
 def parse():
-    global source, out
+    global source, out, book
     if not os.path.exists(source):
-        print('错误: 文件不存在!')
+        logger.error('Error: %s 文件不存在!' % source)
         return
-    print('开始解析')
+
+    logger.info('开始解析')
     filename = os.path.split(source)[-1]
-    print(os.path.split(source))
     if out == '':
         out = os.path.splitext(filename)[0] + '.epub'
-    print(filename, out)
+
+    # 目录管理
+    toc = [(epub.Section(filename), []), ]
+    # 主线
+    spine = ['cover', 'nav']
+    set_cover = False
+
+    # print(filename, out)
+
+    # 输入zip文件的情况
+    if not os.path.isdir(filename):
+        logger.info('输入了文件 %s' % filename)
+        if os.path.splitext(filename.lower())[-1] != '.zip':
+            logger.error('不是zip文件')
+            sys.exit()
+        zipped = zipfile.ZipFile(filename, 'r')
+        filelist = list(zipped.filelist)
+        # 先按文件长短，后按文件名排序
+        filelist.sort(key=lambda k: (len(k.filename), k.filename))
+        for file in filelist:
+            data = zipped.read(file)
+            logger.info("添加文件%s, 文件大小%sKB" % (file.filename, len(data) // 1000))
+            img = epub.EpubItem(file_name="images/%s" % file.filename,
+                                media_type="image/%s" % os.path.splitext(file.filename)[-1][1:],
+                                content=data)
+            if set_cover is False:
+                set_cover = True
+                book.set_cover('cover.jpg', data)
+
+            page = epub.EpubHtml(title=file.filename, file_name='%s.html' % file.filename)
+            page.set_content(("<img src=\"%s\">" % ("images/%s" % file.filename)).encode())
+            toc[0][1].append(page)
+            spine.append(page)
+            # spine.append(img)
+            book.add_item(page)
+            book.add_item(img)
+
+        book.toc = toc
+
+        # add navigation files
+        book.add_item(epub.EpubNcx())
+        book.add_item(epub.EpubNav())
+
+        # create spine
+        book.spine = spine
+        epub.write_epub(out, book)
 
 
 book = epub.EpubBook()
@@ -53,6 +99,7 @@ if __name__ == '__main__':
 
     source = ''
     out = ''
+    logger = getLogger(__name__)
     for name, val in opts:
         if name == '-h':
             print(help_str)
