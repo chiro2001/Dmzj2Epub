@@ -33,7 +33,7 @@ def parse_file(filepath):
 def parse():
     global source, out, book
     if not os.path.exists(source):
-        logger.error('Error: %s 文件不存在!' % source)
+        logger.error('%s 文件不存在!' % source)
         return
 
     logger.info('开始解析')
@@ -43,11 +43,52 @@ def parse():
 
     # 目录管理
     toc = [(epub.Section(filename), []), ]
+    # toc = []
     # 主线
     spine = ['nav']
     set_cover = False
 
     # print(filename, out)
+
+    # 输入文件夹的情况
+    if os.path.isdir(filename):
+        logger.info('输入了文件夹 %s' % filename)
+        filelist = os.listdir(filename)
+        for file in filelist:
+            if os.path.splitext(file.lower())[-1] != '.zip':
+                filelist.remove(file)
+
+        # 先按文件长短，后按文件名排序
+        filelist.sort(key=lambda k: (len(k), k))
+
+        for myzipfile in filelist:
+            logger.info('输入了文件 %s' % myzipfile)
+            myzipfilename = myzipfile.split('.')[0]
+            toc.append((epub.Section(myzipfilename), []))
+            zipped = zipfile.ZipFile(os.path.join(filename, myzipfile), 'r')
+            zipfilelist = list(zipped.filelist)
+            # 先按文件长短，后按文件名排序
+            zipfilelist.sort(key=lambda k: (len(k.filename), k.filename))
+            for file in zipfilelist:
+                data = zipped.read(file)
+                logger.info("添加文件%s, 文件大小%sKB" % (file.filename, len(data) // 1000))
+                img = epub.EpubItem(file_name="images/%s/%s" % (myzipfilename, file.filename),
+                                    media_type="image/%s" % os.path.splitext(file.filename)[-1][1:],
+                                    content=data)
+                if set_cover is False:
+                    set_cover = True
+                    book.set_cover('cover.jpg', data)
+
+                page = epub.EpubHtml(title=file.filename, file_name='%s_%s.html' % (myzipfile, file.filename))
+                page.set_content(("<img src=\"%s\">" % ("images/%s/%s" % (myzipfilename, file.filename))).encode())
+                toc[-1][1].append(page)
+                toc[-1][1].append(img)
+                # toc.append((epub.Section(file.filename.split('.')[0]), [page, img]))
+                spine.append(page)
+                # spine.append(img)
+                book.add_item(page)
+                book.add_item(img)
+
 
     # 输入zip文件的情况
     if not os.path.isdir(filename):
@@ -69,24 +110,27 @@ def parse():
                 set_cover = True
                 book.set_cover('cover.jpg', data)
 
-            page = epub.EpubHtml(title=file.filename, file_name='Text/%s.html' % file.filename)
+            page = epub.EpubHtml(title=file.filename, file_name='%s.html' % file.filename)
             page.set_content(("<img src=\"%s\">" % ("images/%s" % file.filename)).encode())
-            toc[0][1].append(page)
-            # spine.append(page)
+            toc[-1][1].append(page)
+            toc[-1][1].append(img)
+            # toc.append((epub.Section(file.filename.split('.')[0]), [page, img]))
+            spine.append(page)
             # spine.append(img)
             book.add_item(page)
             book.add_item(img)
 
-        book.toc = toc
+    book.toc = toc
 
-        # add navigation files
-        book.add_item(epub.EpubNcx())
-        book.add_item(epub.EpubNav())
+    # add navigation files
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
 
-        # create spine
-        book.spine = spine
-        epub.write_epub(out, book)
-        sys.exit()
+    # create spine
+    book.spine = spine
+    epub.write_epub(out, book)
+
+    sys.exit()
 
 
 book = epub.EpubBook()
